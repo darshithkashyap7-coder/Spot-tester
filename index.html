@@ -3,9 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>S.P.O.T. Android USB OTG Serial Tester</title>
+  <title>Project S.P.O.T. - 3rd Eye Navigation Dashboard</title>
 
-  <!-- WebUSB Serial Polyfill for Android Chrome OTG support -->
+  <!-- TensorFlow.js Core & COCO-SSD Model -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+
+  <!-- WebUSB Serial Polyfill for Android Chrome OTG -->
   <script src="https://cdn.jsdelivr.net/npm/web-serial-polyfill@1.0.15/dist/serial.js"></script>
 
   <style>
@@ -26,70 +30,111 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background-color: var(--bg-dark);
       color: var(--text-main);
-      padding: 20px;
+      padding: 16px;
       display: flex;
-      justify-content: center;
+      flex-direction: column;
       align-items: center;
       min-height: 100vh;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 500px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .header {
+      text-align: center;
+      padding: 12px 0;
+    }
+
+    .header h1 {
+      font-size: 1.5rem;
+      color: var(--accent-cyan);
+      letter-spacing: 1px;
     }
 
     .card {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
       border-radius: 16px;
-      padding: 24px;
-      width: 100%;
-      max-width: 450px;
+      padding: 16px;
       display: flex;
       flex-direction: column;
-      gap: 16px;
-      box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
+      gap: 12px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.4);
     }
 
-    .card-header {
-      font-size: 1.2rem;
-      font-weight: 700;
-      color: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+    .controls-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
     }
 
-    .btn {
-      padding: 14px 16px;
-      border-radius: 10px;
-      font-weight: 700;
-      font-size: 1rem;
-      cursor: pointer;
-      border: none;
-      transition: all 0.2s ease;
-    }
-
-    .btn-cyan { background: var(--accent-cyan); color: #000; }
-    .btn-red { background: var(--accent-red); color: #fff; }
-
-    .status-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 0.85rem;
-      padding: 4px 10px;
-      border-radius: 20px;
-      background: rgba(255,255,255,0.05);
-    }
-    .dot { width: 8px; height: 8px; border-radius: 50%; background: #64748b; }
-    .dot.online { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
-
-    .distance-display {
-      background: #080c16;
+    input, select, button {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 8px;
       border: 1px solid var(--card-border);
-      border-radius: 12px;
-      padding: 20px;
-      text-align: center;
+      background: #080c16;
+      color: var(--text-main);
+      font-size: 0.9rem;
+      outline: none;
     }
 
-    .distance-value {
-      font-size: 3.5rem;
+    button {
+      background: var(--accent-cyan);
+      color: #000;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: none;
+    }
+
+    button.btn-red { background: var(--accent-red); color: #fff; }
+    button.btn-green { background: var(--accent-green); color: #000; }
+
+    .video-container {
+      position: relative;
+      width: 100%;
+      height: 280px;
+      background: #000;
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    /* Un-inverted CSS framing for camera */
+    .cam-flipped {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .telemetry-box {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #080c16;
+      padding: 12px 16px;
+      border-radius: 10px;
+      border: 1px solid var(--card-border);
+    }
+
+    .telemetry-val {
+      font-size: 1.5rem;
       font-weight: 800;
       color: var(--accent-cyan);
       font-family: monospace;
@@ -99,130 +144,295 @@
       background: #04060c;
       border: 1px solid var(--card-border);
       border-radius: 8px;
-      padding: 12px;
-      height: 140px;
+      padding: 10px;
+      height: 100px;
       font-family: monospace;
-      font-size: 0.85rem;
+      font-size: 0.8rem;
       color: var(--accent-cyan);
       overflow-y: auto;
     }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #64748b;
+      display: inline-block;
+      margin-right: 6px;
+    }
+    .status-dot.active { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
   </style>
 </head>
 <body>
 
-  <div class="card">
-    <div class="card-header">
-      <span>📱 Arduino USB OTG Test</span>
-      <div class="status-pill">
-        <span class="dot" id="dot-serial"></span>
-        <span id="text-serial">Disconnected</span>
+  <div class="container">
+    <div class="header">
+      <h1>👁️ PROJECT S.P.O.T.</h1>
+      <p style="font-size: 0.85rem; color: var(--text-muted);">3rd Eye Spatial Guidance Dashboard</p>
+    </div>
+
+    <!-- System Controls -->
+    <div class="card">
+      <div class="controls-grid">
+        <input type="text" id="esp32-url" value="http://192.168.137.104/stream" placeholder="ESP32 Stream URL">
+        <button id="btn-stream" onclick="toggleStream()">Start ESP32 Stream</button>
+      </div>
+
+      <div class="controls-grid">
+        <select id="lang-select">
+          <option value="en-US">English (en-US)</option>
+          <option value="kn-IN">Kannada (ಕನ್ನಡ)</option>
+        </select>
+        <button id="btn-otg" class="btn-green" onclick="connectOTG()">Connect USB OTG</button>
       </div>
     </div>
 
-    <button class="btn btn-cyan" id="btn-connect" onclick="connectUSB()">Connect Arduino via OTG</button>
-
-    <div class="distance-display">
-      <span style="font-size: 0.85rem; color: var(--text-muted);">Ultrasonic Telemetry</span>
-      <div class="distance-value" id="distance-val">-- cm</div>
+    <!-- Vision Viewport -->
+    <div class="card">
+      <div class="video-container">
+        <img id="esp32-feed" class="cam-flipped" crossOrigin="anonymous" src="" alt="Stream Offline" onerror="handleStreamError()">
+        <canvas id="overlay"></canvas>
+      </div>
     </div>
 
-    <div class="card-header" style="font-size: 0.95rem;">
-      <span>📜 Raw Serial Stream</span>
-    </div>
-    <div class="log-box" id="log-console">
-      <div>> System initialized. Connect OTG cable to Arduino.</div>
+    <!-- Ultrasonic Telemetry & Voice Status -->
+    <div class="card">
+      <div class="telemetry-box">
+        <div>
+          <span class="status-dot" id="dot-otg"></span>
+          <span style="font-size: 0.85rem; color: var(--text-muted);">Ultrasonic Distance</span>
+        </div>
+        <div class="telemetry-val" id="dist-display">-- cm</div>
+      </div>
+
+      <div class="log-box" id="sys-log">
+        <div>> System initialised. Load ESP32 stream & connect OTG.</div>
+      </div>
     </div>
   </div>
 
   <script>
-    let port;
-    let reader;
+    let model = null;
+    let isDetecting = false;
+    let lastSpokenText = "";
+    let lastSpeakTime = 0;
+    let otgPort = null;
+    let otgReader = null;
 
-    // Use WebUSB polyfill if WebSerial native API is missing (e.g. Android Chrome)
+    // Custom Kannada dictionary for COCO-SSD object mappings
+    const kannadaDict = {
+      "person": "ವ್ಯಕ್ತಿ",
+      "chair": "ಕುರ್ಚಿ",
+      "table": "ಮೇಜು",
+      "bottle": "ಬಾಟಲಿ",
+      "cup": "ಕಪ್",
+      "laptop": "ಲ್ಯಾಪ್‌ಟಾಪ್",
+      "cell phone": "ಮೊಬೈಲ್ ಫೋನ್",
+      "backpack": "ಚೀಲ",
+      "handbag": "ಹ್ಯಾಂಡ್‌ಬ್ಯಾಗ್",
+      "book": "ಪುಸ್ತಕ",
+      "door": "ಬಾಗಿಲು"
+    };
+
+    // Polyfill WebUSB setup for Android Chrome OTG
     const serial = navigator.serial || window.navigator.serial || new serial.Serial();
 
     function log(msg) {
-      const box = document.getElementById("log-console");
+      const box = document.getElementById("sys-log");
       const div = document.createElement("div");
       div.innerText = "> " + msg;
       box.appendChild(div);
       box.scrollTop = box.scrollHeight;
     }
 
-    async function connectUSB() {
+    // 1. Initialize TensorFlow.js COCO-SSD AI Model
+    async function loadAIModel() {
+      log("Loading local COCO-SSD AI model...");
       try {
-        log("Requesting USB OTG device...");
-        
-        // Request connection to Arduino CH340 / FTDI / CP2102 chip
-        port = await serial.requestPort();
-        await port.open({ baudRate: 9600 });
-
-        document.getElementById("dot-serial").className = "dot online";
-        document.getElementById("text-serial").innerText = "Connected";
-        document.getElementById("btn-connect").innerText = "Disconnect";
-        document.getElementById("btn-connect").className = "btn btn-red";
-        document.getElementById("btn-connect").onclick = disconnectUSB;
-
-        log("Arduino connected over USB OTG!");
-        readSerialData();
+        model = await cocoSsd.load({ base: 'mobilenet_v2' });
+        log("AI Model loaded successfully!");
       } catch (err) {
-        log("Connection Error: " + err.message);
+        log("AI Model Error: " + err.message);
+      }
+    }
+    loadAIModel();
+
+    // 2. ESP32 Camera Stream Control
+    function toggleStream() {
+      const img = document.getElementById("esp32-feed");
+      const url = document.getElementById("esp32-url").value;
+
+      if (img.src && img.src !== window.location.href) {
+        img.src = "";
+        isDetecting = false;
+        document.getElementById("btn-stream").innerText = "Start ESP32 Stream";
+        log("Stream stopped.");
+      } else {
+        log("Connecting to ESP32 stream: " + url);
+        img.src = url;
+        document.getElementById("btn-stream").innerText = "Stop Stream";
+        img.onload = () => {
+          log("Camera stream live. Starting detection loop...");
+          if (!isDetecting) {
+            isDetecting = true;
+            detectFrame();
+          }
+        };
       }
     }
 
-    async function readSerialData() {
-      const textDecoder = new TextDecoderStream();
-      const readableStreamClosed = port.readable.pipeTo(textDecoder.writable);
-      reader = textDecoder.readable.getReader();
+    function handleStreamError() {
+      log("Stream offline or blocked by CORS. Verify IP address.");
+    }
 
-      let buffer = "";
+    // 3. AI Object Detection Loop
+    async function detectFrame() {
+      if (!isDetecting || !model) return;
+
+      const img = document.getElementById("esp32-feed");
+      const canvas = document.getElementById("overlay");
+      const ctx = canvas.getContext("2d");
+
+      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+        canvas.width = img.clientWidth;
+        canvas.height = img.clientHeight;
+
+        // Run object detection (Confidence threshold 0.22)
+        const predictions = await model.detect(img, 5, 0.22);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        predictions.forEach(pred => {
+          const [x, y, width, height] = pred.bbox;
+          
+          // Draw bounding boxes
+          ctx.strokeStyle = "#38bdf8";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x, y, width, height);
+
+          // Draw labels
+          ctx.fillStyle = "#38bdf8";
+          ctx.font = "14px sans-serif";
+          ctx.fillText(`${pred.class} (${Math.round(pred.score * 100)}%)`, x, y > 10 ? y - 5 : 10);
+
+          // Announce detected items with audio guidance
+          announceObject(pred.class, x, canvas.width);
+        });
+      }
+
+      requestAnimationFrame(detectFrame);
+    }
+
+    // 4. Speech Synthesis Engine (English & Kannada)
+    function announceObject(label, xPos, frameWidth) {
+      const now = Date.now();
+      // Rate limit speech to once every 2.5 seconds to prevent overlap
+      if (now - lastSpeakTime < 2500) return;
+
+      let position = "ahead";
+      if (xPos < frameWidth * 0.33) position = "on your left";
+      else if (xPos > frameWidth * 0.66) position = "on your right";
+
+      const selectedLang = document.getElementById("lang-select").value;
+      let textToSpeak = "";
+
+      if (selectedLang === "kn-IN") {
+        let kannadaLabel = kannadaDict[label.toLowerCase()] || label;
+        let knPos = "ಮುಂದೆ";
+        if (position === "on your left") knPos = "ನಿಮ್ಮ ಎಡಭಾಗದಲ್ಲಿದೆ";
+        if (position === "on your right") knPos = "ನಿಮ್ಮ ಬಲಭಾಗದಲ್ಲಿದೆ";
+        textToSpeak = `${kannadaLabel} ${knPos}`;
+      } else {
+        textToSpeak = `${label} ${position}`;
+      }
+
+      // Suppress duplicate speech
+      if (textToSpeak === lastSpokenText && (now - lastSpeakTime < 5000)) return;
+
+      lastSpokenText = textToSpeak;
+      lastSpeakTime = now;
+
+      const utterance = new SpeechSynthesisUtterance(textToSpeak);
+      utterance.lang = selectedLang;
+      window.speechSynthesis.speak(utterance);
+      log(`🗣️ Speech: "${textToSpeak}"`);
+    }
+
+    // 5. WebUSB Serial Connection (Mivi OTG Adapter -> Arduino Nano)
+    async function connectOTG() {
+      // CH340, FTDI, CP2102, and Arduino USB Vendor IDs
+      const filters = [
+        { vendorId: 0x1a86 }, // CH340 / CH341
+        { vendorId: 0x0403 }, // FTDI
+        { vendorId: 0x10c4 }, // CP2102
+        { vendorId: 0x2341 }  // Official Arduino
+      ];
 
       try {
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          if (value) {
-            buffer += value;
-            let parts = buffer.split("\n");
-            buffer = parts.pop();
+        log("Searching for USB OTG serial device...");
+        otgPort = await serial.requestPort({ filters: filters });
+        await otgPort.open({ baudRate: 9600 });
 
-            for (let line of parts) {
-              line = line.trim();
-              if (line.length > 0) {
-                log(line);
-                parseDistance(line);
-              }
+        document.getElementById("dot-otg").className = "status-dot active";
+        document.getElementById("btn-otg").innerText = "Disconnect OTG";
+        document.getElementById("btn-otg").className = "btn-red";
+        document.getElementById("btn-otg").onclick = disconnectOTG;
+
+        log("Arduino Nano connected via USB OTG!");
+        readOTGData();
+      } catch (err) {
+        log("OTG Error: " + err.message);
+      }
+    }
+
+    async function readOTGData() {
+      const textDecoder = new TextDecoderStream();
+      otgPort.readable.pipeTo(textDecoder.writable);
+      otgReader = textDecoder.readable.getReader();
+
+      let buffer = "";
+      while (true) {
+        const { value, done } = await otgReader.read();
+        if (done) break;
+        if (value) {
+          buffer += value;
+          let parts = buffer.split("\n");
+          buffer = parts.pop();
+
+          for (let line of parts) {
+            line = line.trim();
+            if (line.length > 0) {
+              parseDistance(line);
             }
           }
         }
-      } catch (err) {
-        log("Read Error: " + err.message);
       }
     }
 
     function parseDistance(data) {
       let match = data.match(/\d+/);
       if (match) {
-        let distVal = parseInt(match[0], 10);
-        if (distVal > 0 && distVal <= 400) {
-          document.getElementById("distance-val").innerText = distVal + " cm";
+        let dist = parseInt(match[0], 10);
+        if (dist > 0 && dist <= 400) {
+          document.getElementById("dist-display").innerText = dist + " cm";
+
+          // Trigger proximity safety warning if object is under 30 cm
+          if (dist < 30) {
+            const lang = document.getElementById("lang-select").value;
+            const warningText = lang === "kn-IN" ? "ಎಚ್ಚರಿಕೆ! ಹತ್ತಿರದಲ್ಲಿ ಅಡಚಣೆ ಇದೆ" : "Warning! Obstacle close";
+            announceObject(warningText, 0, 0);
+          }
         }
       }
     }
 
-    async function disconnectUSB() {
-      if (reader) {
-        await reader.cancel();
-      }
-      if (port) {
-        await port.close();
-      }
-      document.getElementById("dot-serial").className = "dot";
-      document.getElementById("text-serial").innerText = "Disconnected";
-      document.getElementById("btn-connect").innerText = "Connect Arduino via OTG";
-      document.getElementById("btn-connect").className = "btn btn-cyan";
-      document.getElementById("btn-connect").onclick = connectUSB;
-      log("Disconnected.");
+    async function disconnectOTG() {
+      if (otgReader) await otgReader.cancel();
+      if (otgPort) await otgPort.close();
+      document.getElementById("dot-otg").className = "status-dot";
+      document.getElementById("btn-otg").innerText = "Connect USB OTG";
+      document.getElementById("btn-otg").className = "btn-green";
+      document.getElementById("btn-otg").onclick = connectOTG;
+      log("OTG Disconnected.");
     }
   </script>
 </body>
