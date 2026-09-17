@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>S.P.O.T. Android USB OTG Serial Tester</title>
+
+  <!-- WebUSB Serial Polyfill for Android Chrome OTG support -->
+  <script src="https://cdn.jsdelivr.net/npm/web-serial-polyfill@1.0.15/dist/serial.js"></script>
+
+  <style>
+    :root {
+      --bg-dark: #070a12;
+      --card-bg: #101625;
+      --card-border: #1e293b;
+      --accent-cyan: #38bdf8;
+      --accent-green: #34d399;
+      --accent-red: #f87171;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 24px;
+      width: 100%;
+      max-width: 450px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
+    }
+
+    .card-header {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .btn {
+      padding: 14px 16px;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 1rem;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+    }
+
+    .btn-cyan { background: var(--accent-cyan); color: #000; }
+    .btn-red { background: var(--accent-red); color: #fff; }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.85rem;
+      padding: 4px 10px;
+      border-radius: 20px;
+      background: rgba(255,255,255,0.05);
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #64748b; }
+    .dot.online { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
+
+    .distance-display {
+      background: #080c16;
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .distance-value {
+      font-size: 3.5rem;
+      font-weight: 800;
+      color: var(--accent-cyan);
+      font-family: monospace;
+    }
+
+    .log-box {
+      background: #04060c;
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 12px;
+      height: 140px;
+      font-family: monospace;
+      font-size: 0.85rem;
+      color: var(--accent-cyan);
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <div class="card-header">
+      <span>📱 Arduino USB OTG Test</span>
+      <div class="status-pill">
+        <span class="dot" id="dot-serial"></span>
+        <span id="text-serial">Disconnected</span>
+      </div>
+    </div>
+
+    <button class="btn btn-cyan" id="btn-connect" onclick="connectUSB()">Connect Arduino via OTG</button>
+
+    <div class="distance-display">
+      <span style="font-size: 0.85rem; color: var(--text-muted);">Ultrasonic Telemetry</span>
+      <div class="distance-value" id="distance-val">-- cm</div>
+    </div>
+
+    <div class="card-header" style="font-size: 0.95rem;">
+      <span>📜 Raw Serial Stream</span>
+    </div>
+    <div class="log-box" id="log-console">
+      <div>> System initialized. Connect OTG cable to Arduino.</div>
+    </div>
+  </div>
+
+  <script>
+    let port;
+    let reader;
+
+    // Use WebUSB polyfill if WebSerial native API is missing (e.g. Android Chrome)
+    const serial = navigator.serial || window.navigator.serial || new serial.Serial();
+
+    function log(msg) {
+      const box = document.getElementById("log-console");
+      const div = document.createElement("div");
+      div.innerText = "> " + msg;
+      box.appendChild(div);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    async function connectUSB() {
+      try {
+        log("Requesting USB OTG device...");
+        
+        // Request connection to Arduino CH340 / FTDI / CP2102 chip
+        port = await serial.requestPort();
+        await port.open({ baudRate: 9600 });
+
+        document.getElementById("dot-serial").className = "dot online";
+        document.getElementById("text-serial").innerText = "Connected";
+        document.getElementById("btn-connect").innerText = "Disconnect";
+        document.getElementById("btn-connect").className = "btn btn-red";
+        document.getElementById("btn-connect").onclick = disconnectUSB;
+
+        log("Arduino connected over USB OTG!");
+        readSerialData();
+      } catch (err) {
+        log("Connection Error: " + err.message);
+      }
+    }
+
+    async function readSerialData() {
+      const textDecoder = new TextDecoderStream();
+      const readableStreamClosed = port.readable.pipeTo(textDecoder.writable);
+      reader = textDecoder.readable.getReader();
+
+      let buffer = "";
+
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (value) {
+            buffer += value;
+            let parts = buffer.split("\n");
+            buffer = parts.pop();
+
+            for (let line of parts) {
+              line = line.trim();
+              if (line.length > 0) {
+                log(line);
+                parseDistance(line);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        log("Read Error: " + err.message);
+      }
+    }
+
+    function parseDistance(data) {
+      let match = data.match(/\d+/);
+      if (match) {
+        let distVal = parseInt(match[0], 10);
+        if (distVal > 0 && distVal <= 400) {
+          document.getElementById("distance-val").innerText = distVal + " cm";
+        }
+      }
+    }
+
+    async function disconnectUSB() {
+      if (reader) {
+        await reader.cancel();
+      }
+      if (port) {
+        await port.close();
+      }
+      document.getElementById("dot-serial").className = "dot";
+      document.getElementById("text-serial").innerText = "Disconnected";
+      document.getElementById("btn-connect").innerText = "Connect Arduino via OTG";
+      document.getElementById("btn-connect").className = "btn btn-cyan";
+      document.getElementById("btn-connect").onclick = connectUSB;
+      log("Disconnected.");
+    }
+  </script>
+</body>
+</html>
